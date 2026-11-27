@@ -1949,28 +1949,35 @@ function RunFoldButton({
           tintColor={iconColor}
         />
       </Pressable>
-      {loading ? (
-        <Animated.View
-          accessible={false}
-          importantForAccessibility="no-hide-descendants"
-          className="gap-2 px-1 pb-2"
-          // The bars keep their space but stay hidden until the rows below have slid past them.
-          style={{
-            opacity: disclosureActive ? 0 : 1,
-            transitionProperty: "opacity",
-            transitionDuration: DISCLOSURE_DETAIL_FADE_MS,
-            transitionDelay: THREAD_DISCLOSURE_TRANSITION_MS,
-          }}
-        >
-          {(["40%", "60%", "33%"] as const).map((width) => (
-            <View key={width} className="flex-row items-center gap-2">
-              <View className="size-3 rounded bg-subtle-strong" />
-              <View className="h-2.5 rounded-full bg-subtle-strong" style={{ width }} />
-            </View>
-          ))}
-        </Animated.View>
-      ) : null}
+      {loading ? <RunFoldLoadingBars disclosureActive={disclosureActive} /> : null}
     </View>
+  );
+}
+
+function RunFoldLoadingBars(props: { disclosureActive: boolean }) {
+  // Bars that appear while a disclosure is moving rows wait until the rows below have slid
+  // past them; once shown they stay shown through later disclosures.
+  const [revealed, setRevealed] = useState(!props.disclosureActive);
+  if (!revealed && !props.disclosureActive) setRevealed(true);
+  return (
+    <Animated.View
+      accessible={false}
+      importantForAccessibility="no-hide-descendants"
+      className="gap-2 px-1 pb-2"
+      style={{
+        opacity: revealed ? 1 : 0,
+        transitionProperty: "opacity",
+        transitionDuration: DISCLOSURE_DETAIL_FADE_MS,
+        transitionDelay: THREAD_DISCLOSURE_TRANSITION_MS,
+      }}
+    >
+      {(["40%", "60%", "33%"] as const).map((width) => (
+        <View key={width} className="flex-row items-center gap-2">
+          <View className="size-3 rounded bg-subtle-strong" />
+          <View className="h-2.5 rounded-full bg-subtle-strong" style={{ width }} />
+        </View>
+      ))}
+    </Animated.View>
   );
 }
 
