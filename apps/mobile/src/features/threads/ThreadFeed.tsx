@@ -1883,7 +1883,7 @@ function RunFoldButton({
   onToggle,
   rowSizing,
   iconColor,
-  disclosure,
+  disclosureActive,
 }: {
   entry: Extract<ThreadFeedEntry, { type: "run-fold" }>;
   environmentId: EnvironmentId;
@@ -1891,8 +1891,8 @@ function RunFoldButton({
   onToggle: (runId: RunId) => void;
   rowSizing: ReturnType<typeof deriveThreadWorkLogSizing>;
   iconColor: ColorValue;
-  /** This fold's own disclosure hold: rows below keep their old spots until it slides, then slide past. */
-  disclosure: "held" | "sliding" | null;
+  /** A disclosure hold or slide is moving rows, so new bars could land on a row still at its old spot. */
+  disclosureActive: boolean;
 }) {
   const gt = useGT();
   const loadWork = useAtomCommand(threadEnvironment.loadEarlierHistory, { reportFailure: false });
@@ -1954,11 +1954,12 @@ function RunFoldButton({
           accessible={false}
           importantForAccessibility="no-hide-descendants"
           className="gap-2 px-1 pb-2"
-          // The bars keep their space but stay hidden until the row below has slid past them.
+          // The bars keep their space but stay hidden until the rows below have slid past them.
           style={{
-            opacity: disclosure === null ? 1 : 0,
+            opacity: disclosureActive ? 0 : 1,
             transitionProperty: "opacity",
             transitionDuration: DISCLOSURE_DETAIL_FADE_MS,
+            transitionDelay: THREAD_DISCLOSURE_TRANSITION_MS,
           }}
         >
           {(["40%", "60%", "33%"] as const).map((width) => (
@@ -1994,7 +1995,7 @@ function renderFeedEntry(
     readonly pendingFoldMessageId: string | null;
     readonly formatMessageTime: (input: string) => string;
     readonly copiedRowId: string | null;
-    readonly foldDisclosure: "held" | "sliding" | null;
+    readonly disclosureActive: boolean;
     readonly expandedWorkRows: Record<string, boolean>;
     readonly workRowSizing: ReturnType<typeof deriveThreadWorkLogSizing>;
     readonly workGroupScrollPositions: Map<string, ThreadWorkGroupScrollPosition>;
@@ -2092,7 +2093,7 @@ function renderFeedEntry(
             onToggle={props.onToggleTurnFold}
             rowSizing={props.workRowSizing}
             iconColor={iconSubtleColor}
-            disclosure={props.foldDisclosure}
+            disclosureActive={props.disclosureActive}
           />
         )}
         {props.worktreeSetup && entry.id === props.setupFoldRowId ? (
@@ -3023,7 +3024,6 @@ function useThreadFeedPresentation(
 }
 
 type DisclosureLayout = {
-  anchorKey: string;
   /** Each row's top relative to the anchor row's top, before the toggle. */
   positions: ReadonlyMap<string, number>;
   anchorIndex: number;
@@ -4069,7 +4069,6 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
           );
         }
         const motion = {
-          anchorKey,
           positions,
           anchorIndex,
           anchorToEnd: (feedContentEnd(state) ?? anchor) - anchor,
@@ -4281,12 +4280,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
             onCiteAssistantText: props.onCiteAssistantText,
             threadId: props.threadId,
             copiedRowId,
-            foldDisclosure:
-              disclosureLayout?.anchorKey === info.item.id
-                ? disclosureLayout.playing
-                  ? "sliding"
-                  : "held"
-                : null,
+            disclosureActive: disclosureLayout !== null,
             expandedWorkRows,
             workRowSizing,
             workGroupScrollPositions,
