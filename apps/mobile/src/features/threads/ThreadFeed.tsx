@@ -1,4 +1,5 @@
 import { CollapsibleUserMessageBody } from "./CollapsibleUserMessageBody";
+import { useSyncListLayoutOnChange } from "./useSyncListLayoutOnChange";
 import { msg, T, useGT, useLocale, useMessages } from "gt-react-native";
 import { m } from "../../i18n/messages";
 import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
@@ -1882,6 +1883,7 @@ function RunFoldButton({
   onToggle,
   rowSizing,
   iconColor,
+  disclosure,
 }: {
   entry: Extract<ThreadFeedEntry, { type: "run-fold" }>;
   environmentId: EnvironmentId;
@@ -1889,6 +1891,8 @@ function RunFoldButton({
   onToggle: (runId: RunId) => void;
   rowSizing: ReturnType<typeof deriveThreadWorkLogSizing>;
   iconColor: ColorValue;
+  /** This fold's own disclosure hold: rows below keep their old spots until it slides. */
+  disclosure: "held" | "sliding" | null;
 }) {
   const gt = useGT();
   const loadWork = useAtomCommand(threadEnvironment.loadEarlierHistory, { reportFailure: false });
@@ -1913,6 +1917,7 @@ function RunFoldButton({
   }, [entry.expanded, anchorsKey, environmentId, threadId]);
   const error = anchorsKey && failed ? gt("Couldn't load work. Tap to retry.") : null;
   const loading = entry.expanded && anchorsKey !== "" && !failed;
+  useSyncListLayoutOnChange(loading);
   const toggle = () => {
     setFailed(false);
     if (error && entry.expanded) load();
@@ -1948,8 +1953,14 @@ function RunFoldButton({
         <Animated.View
           accessible={false}
           importantForAccessibility="no-hide-descendants"
-          entering={RUN_FOLD_LOADING_ENTER}
           className="gap-2 px-1 pb-2"
+          // The bars keep their space but stay hidden until the row below has slid past them.
+          style={{
+            opacity: disclosure === "held" ? 0 : 1,
+            transitionProperty: "opacity",
+            transitionDuration: DISCLOSURE_DETAIL_FADE_MS,
+            transitionDelay: THREAD_DISCLOSURE_TRANSITION_MS,
+          }}
         >
           {(["40%", "60%", "33%"] as const).map((width) => (
             <View key={width} className="flex-row items-center gap-2">
@@ -1984,6 +1995,7 @@ function renderFeedEntry(
     readonly pendingFoldMessageId: string | null;
     readonly formatMessageTime: (input: string) => string;
     readonly copiedRowId: string | null;
+    readonly foldDisclosure: "held" | "sliding" | null;
     readonly expandedWorkRows: Record<string, boolean>;
     readonly workRowSizing: ReturnType<typeof deriveThreadWorkLogSizing>;
     readonly workGroupScrollPositions: Map<string, ThreadWorkGroupScrollPosition>;
@@ -2081,6 +2093,7 @@ function renderFeedEntry(
             onToggle={props.onToggleTurnFold}
             rowSizing={props.workRowSizing}
             iconColor={iconSubtleColor}
+            disclosure={props.foldDisclosure}
           />
         )}
         {props.worktreeSetup && entry.id === props.setupFoldRowId ? (
@@ -3011,6 +3024,7 @@ function useThreadFeedPresentation(
 }
 
 type DisclosureLayout = {
+  anchorKey: string;
   /** Each row's top relative to the anchor row's top, before the toggle. */
   positions: ReadonlyMap<string, number>;
   anchorIndex: number;
@@ -3022,10 +3036,6 @@ type DisclosureLayout = {
 const DISCLOSURE_DETAIL_DELAY_MS = 135;
 const DISCLOSURE_DETAIL_FADE_MS = 70;
 const DISCLOSURE_SETTLE_MAX_MS = 100;
-// The fold's loading bars wait out the longest hold and slide that move the next row below them.
-const RUN_FOLD_LOADING_ENTER = FadeIn.delay(
-  DISCLOSURE_SETTLE_MAX_MS + THREAD_DISCLOSURE_TRANSITION_MS,
-).duration(DISCLOSURE_DETAIL_FADE_MS);
 const unsubscribeNothing = () => {};
 
 function feedContentEnd(state: ReturnType<LegendListRef["getState"]>): number | undefined {
@@ -4020,9 +4030,15 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     });
   };
 
+  const working = props.activeWorkStartedAt !== null || props.runlessWorkActive === true;
+  const releaseDisclosureHold = useEffectEvent(() => playDisclosure());
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- a turn that starts during an idle hold would keep its new rows hidden; the hold lives in timers and frame callbacks outside React
+  useLayoutEffect(() => {
+    if (working) releaseDisclosureHold();
+  }, [working]);
+
   const preserveDisclosurePosition = (anchorKey: string | null) => {
     const list = listRef.current;
-    const working = props.activeWorkStartedAt !== null || props.runlessWorkActive === true;
     // An anchor ends end-follow until the reader scrolls, so a streaming turn keeps the live end.
     if (anchorKey !== null && list && !(working && list.getState().isFollowingEnd)) {
       list.cancelScroll();
@@ -4054,6 +4070,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
           );
         }
         const motion = {
+          anchorKey,
           positions,
           anchorIndex,
           anchorToEnd: (feedContentEnd(state) ?? anchor) - anchor,
@@ -4265,6 +4282,12 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
             onCiteAssistantText: props.onCiteAssistantText,
             threadId: props.threadId,
             copiedRowId,
+            foldDisclosure:
+              disclosureLayout?.anchorKey === info.item.id
+                ? disclosureLayout.playing
+                  ? "sliding"
+                  : "held"
+                : null,
             expandedWorkRows,
             workRowSizing,
             workGroupScrollPositions,
