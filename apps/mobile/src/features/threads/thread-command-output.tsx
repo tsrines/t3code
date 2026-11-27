@@ -40,7 +40,10 @@ export function ThreadCommandOutput(props: {
     () => terminalOutputSpans(text, TERMINAL_PALETTES[props.themeAppearance]),
     [text, props.themeAppearance],
   );
-  useSyncListLayoutOnChange(`${text.length}:${data === null}:${data?.running}:${error ?? ""}`);
+  useSyncListLayoutOnChange(spans);
+  useSyncListLayoutOnChange(
+    `${data === null}:${data?.running}:${data?.output.truncated}:${error ?? ""}`,
+  );
   if (text.length === 0) {
     const message = error
       ? gt("Couldn't load output: {error}", { error })

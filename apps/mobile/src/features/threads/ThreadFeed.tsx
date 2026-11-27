@@ -1891,7 +1891,7 @@ function RunFoldButton({
   onToggle: (runId: RunId) => void;
   rowSizing: ReturnType<typeof deriveThreadWorkLogSizing>;
   iconColor: ColorValue;
-  /** This fold's own disclosure hold: rows below keep their old spots until it slides. */
+  /** This fold's own disclosure hold: rows below keep their old spots until it slides, then slide past. */
   disclosure: "held" | "sliding" | null;
 }) {
   const gt = useGT();
@@ -1956,10 +1956,9 @@ function RunFoldButton({
           className="gap-2 px-1 pb-2"
           // The bars keep their space but stay hidden until the row below has slid past them.
           style={{
-            opacity: disclosure === "held" ? 0 : 1,
+            opacity: disclosure === null ? 1 : 0,
             transitionProperty: "opacity",
             transitionDuration: DISCLOSURE_DETAIL_FADE_MS,
-            transitionDelay: THREAD_DISCLOSURE_TRANSITION_MS,
           }}
         >
           {(["40%", "60%", "33%"] as const).map((width) => (

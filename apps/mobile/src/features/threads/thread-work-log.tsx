@@ -920,7 +920,9 @@ const ThreadWorkLogRow = function ThreadWorkLogRow(
       ? { environmentId: props.environmentId, row: row.projectedItem }
       : null,
   );
-  useSyncListLayoutOnChange(expanded ? fetchedDetail : null);
+  useSyncListLayoutOnChange(
+    expanded ? (fetchedDetail.data?.item ?? fetchedDetail.error ?? fetchedDetail.data) : null,
+  );
   const failureItem = row.projectedItem.item;
   if (failureItem.type === "error" && failureItem.status === "failed") {
     const warning = failureItem.failure.class === "usage_limit";
